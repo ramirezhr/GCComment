@@ -7,12 +7,9 @@
 // @include         /^https://api.dropbox.com/.*$/
 // @include         /^https://gist.github.com/.*$/
 // @include         /^https://api.github.com/.*$/
-// @require         https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/2.5.13/Dropbox-sdk.min.js
+// @require         https://cdn.jsdelivr.net/npm/dropbox@10.46.0/dist/Dropbox-sdk.min.js
 // @require         https://code.jquery.com/jquery-3.7.1.min.js
 // @require         https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js
-// @require         https://cdn.jsdelivr.net/gh/lukeIam/GCComment@GistImportExport/src/jquery.qrcode.min.js
-// @require         https://cdn.jsdelivr.net/gh/lukeIam/GCComment@GistImportExport/src/jquery.nyroModal.custom.min.js
-// @resource        nyroModalCss https://cdn.jsdelivr.net/gh/lukeIam/GCComment@GistImportExport/src/nyroModal.css
 // @grant           GM_getValue
 // @grant           GM_setValue
 // @grant           GM_deleteValue
@@ -24,23 +21,17 @@
 // @grant           GM_info
 // @grant           GM.info
 // @icon            https://raw.githubusercontent.com/ramirezhr/GCComment/master/resources/icon.png
-// @version         103
+// @updateURL       https://raw.githubusercontent.com/ramirezhr/GCComment/master/src/gccomment.user.js
+// @downloadURL     https://raw.githubusercontent.com/ramirezhr/GCComment/master/src/gccomment.user.js
+// @version         104
 // @author          Birnbaum2001, lukeIam, ramirez
 // ==/UserScript==
 
 
 // version information
 var version = GM_info.script.version;
-var updatechangesurl = 'https://raw.githubusercontent.com/Birnbaum2001/GCComment/master/src/version.json';
-var updateurl = 'https://raw.githubusercontent.com/Birnbaum2001/GCComment/master/src/gccomment.user.js';
-
-var browser = "unknown";
-if (typeof (chrome) !== "undefined") {
-	// Chrome detected
-	browser = "Chrome";
-} else {
-	browser = "FireFox";
-}
+var updatechangesurl = 'https://raw.githubusercontent.com/ramirezhr/GCComment/master/src/version.json';
+var updateurl = 'https://raw.githubusercontent.com/ramirezhr/GCComment/master/src/gccomment.user.js';
 
 var mainCode = function(){
 
@@ -142,13 +133,20 @@ var mainCode = function(){
 	var DELIM = "#gccom#";
 	var COMPREFIX = "gccomment";
 	var COMGCPREFIX = "gccode-";
+	// Schema v2: der Datensatz haengt am GC-Code statt an der Groundspeak-GUID.
+	// Das Praefix darf "gccomment" nicht enthalten, sonst greifen die alten
+	// Schluessel-Scans mit indexOf() auch auf die neuen Werte zu.
+	var COMV2PREFIX = "gccv2-";
+	var COMSCHEMA = 1;
 	var DEG = String.fromCharCode(176);
 	var DEFAULTCOORDS = "<N dd" + DEG + " mm.mmm E dd" + DEG + " mm.mmm>";
 	var stateOptions = new Array("-", "not solved", "solved", "found");
 	var LAST_IMPORT = "lastimport";
 	var LAST_EXPORT = "lastexport";
 	var ARCHIVED = "archive";
-	var browser = "unknown";
+	// Firefox trennt Sandbox und Seite per Xray Vision. Wo diese Grenze besteht,
+	// muessen Funktionen und Objekte exportiert werden, bevor die Seite sie sieht.
+	var needsPageBridge = false;
 	var xmlversion = "<?xml version='1.0' encoding='utf-8'?>\n";
 	var homelat, homelng;
 
@@ -240,9 +238,7 @@ var mainCode = function(){
 	var archiveAdd = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAMVSURBVDjLdZNLaFx1GEfPnZk7cyfNkElS0jTVKKRpE2PSpAhKHyqo2QhtShUiCPWBLhTdFKUUlxYUqggGxYqIbsSNFKQmVqMhTVujSQuhtnmMaR5NJs0kncz7ztz5f5+LgguNv/WPszkcS1XZbFPnDrUh8q6KRlTkrdYj/Vc3+1n/Bkz3H65T0TdV5PXapiNRU1jjztxgVkU/UyMfPtg7uLwpYGagx1bVF1Tk7ciO7p3bWp/BJ4ZsfAw75Gc1NsTGrfF5FTmtIl90Hhsp/AOYHujpRvSdUHXnwW0tR3Gqm0FLlJMz3Bw6xb0P7MdXcR/FXILbsXEyiRujasypva+Mfm9N9R/+EpFjW3f2Wk5NO25mjVTiBqaUxcvFCVlF6ht3g5vEX9mIz4mQjk9zOzZOPjn/TUCNPL/ryT7Ly6yRjQ8hpTShfIJ8Ok56cYm9vR9jh7dAbg7NxbDS09Q2dFBVA1d+mH02oCI5xaoKOiEiNY0UEtepqI4SrQ4TJg/uApgguEtQWCS/Mkp27hLO/UdRI7mAioAAVhC7qhk7FMFdHUOyq9h+sPJ/gU8prfxMJr1BORyFYAj1yqgIATXCXQ8GtAiBLTh1XZSDYRx3HVn5iZSXoexUYkIRJF+CsiKlMmoMATXmrlA1IB5IHrRIoHIHkfpdpO6M4fkcLiyFuLwWJu26lNwUB5MTtBghoCJhn20DYSivgxRBXDBFcBooK/yyEGTKruXxRx/inppmfv3zLOevXWByw630qZHh2eGPKCQXINQA/gowJVAPENQTflzw6GzZg/EZ9mx/CmN5PNK+j4s5z/KJMU9nFkdenRw4GZv//WsMQYjsBjsMCqbokcisY1uVHGp9A4DjT5yhqa4Do/j8n343b+o7X7oSHzvzbT4x48UnzrVj+Z1I48NY9lZEwnw1OkT1dpvh2bMcaOrhvfMvkimsc21yyv1PTH/0dbWpkZMq8lzTYy9bhdU5Pr84yPVomX0dB2iu72Jm5SqXJka4dTP1gfV/OV8+3datIicQCarI+8eXc/uB14AIkAE++a1v+cTfDyOvKVPjhy0AAAAASUVORK5CYII=';
 	var archiveRemove = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAMNSURBVDjLdZNLaFx1GMV/d+bO3DtJxkwSSWNq05YkrTVa04qIiOiiRIxgE2ohhUIKRQQFBcGiIiJiFaGIYEFERFy5dCE1pQ8JIbSEJhG66GM6idOk6Uwyec7zztz7/z4XlSw0nvXhx4FzjqWqbKXb517rQeRzFY2ryPv7Bkf+3Mpn/RuQHDncqqLvqMjbLZ2DCVNZZjV9uaii36uRr58Yunx/S8Cd8wMRVT2hIqfi2/u6tu17nZAYiplJIk6YpdQo6/em7qrIGRX5sXd4vLIJSJ4f6EP0Y6ep94Vtjx3BbeoGrRGs3eGv0dPsePx5QnU7qZZyLKamKORuTqgxpw++MfGbdXvk8E+IDD/cNWS5zU/iFZbZyN3E1Ir4pQyOVaWtYy94a4QbOgi5cfKZJIupKcprd3+x1cjxPYfOWn5hmWJmFKnlcco5yvkM+fkFDg59SyRWD6U0Wkph5ZO0tO+nsRmmf589aqtISbEao65DvLmDSu4GdU0JEk0xYpTBmwMTBW8BKvOUsxMU01dwdx1BjZRsFQEBrCiRxm4iThxvaRIpLhEJg1WegZBSy16ikF8niCUg6qB+gIpgqxEe9GBAq2DX47YeIIjGcL0VJHuRDb9A4DZgnDhSrkGgSC1AjcFWYx4UqgbEBymDVrEbthNv28PG6iR+yGVlIsfKtTm8xXVCD0VpfY5/EojEQpEIEINgBaQK4oGpgttOoLA6sUIt6/L08Q9xdvdQuX6BG+OX8IP1+pAaGZsd+4bK2hw47RCuA1MD9QFBfSFzJUn3S0dxZ0axfj5G3eyv7Opopja3HthizKuF+fHhW+mxU82dh7oe3d9POL4XyinwSpiqj1mr4bbthv73Nidsf/oIIU+czSlP//Bsq4q8q0bean9qINHe2w++R37+KtOffckzrwxSP3eOaiVLGSjkw9yaYeE/Z7p29kCPGvlIRY51vnjSqiylmb/4B3be0x0tgWWH7lHIBaQXw8b39BPr/+589UxPn4p8gEhURb7ierWntHr/zbCxdpqwLih89/KF4Iu/AXSvuZLBEiNYAAAAAElFTkSuQmCC';
 
-	var commentIconShare = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACNElEQVQ4T32TTYtSURjH/8e3MvVqQ5PjFJNvODJiJojgB3DRSnBnX8GFG1tJCxlx4cKNhBsLFxIuBEGEdm3cubJBpIF8SWocNSfHqaYCPXEOKN65MA883MM99/k9L//7kHq9TrFlq9UKlFKsn+FwmGzf3zwTBjCbzZv3LHBt/X4foVCIA14cv6fvXj2XwDYAlpX52mQyGUajEYLBIGHBBw+1GE5+4iaE1Go1UQWEEMjlcu4qlQqJ0ic8MWqxK6gwXfzDl7EYQqrVKrXZbOj1emDBSqUSOp0OVqsVL9+ewLynw67hLnpnc1j3DZjO/2BwfrWphFQqFWq328FKZs6yarVaxN98hMUkwHhfjf7octOaxaTH+Mc1+qMFh5ByuUwdDgeGwyEP1uv1eP1hAeu+HqYdDQbnC4kI5j0Bo4tf6J1dgpRKJep0OvkAWd9qtRrHlYEoSHfvDnYENS4W17j6/Vd0R4rFInW5XFx3NgOFQoHpdAqLxYLZbIZAIMBVsD1+gO7X71IVCoUCdbvdHLAtIYN1u11EIhEOODQbcToYSwH5fJ56PB4+uG1j2TudDqLRKAcc2R+h8/mbFJDL5ajX64UgCCIAa6PdbiMWi3HA08MDnJwOpYBsNkt9Ph8MBoMIMJlM0Gq1EI/HOeDZkRWtTk8KyGQy1O/3Yz6fiwAajQbNZhOJRIID1peSXzmdTtNAILDZvvU+sKE2Gg2kUqnbtzGZTFL28XK55JDtdWZKZDKZWwH/ARw1EUZjI/GaAAAAAElFTkSuQmCC';
 
-	var linkIcon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAABSlBMVEX////////9/f3+/v77+/v8/Pz////4+Pj09PTu7u7r6+vs7Ozp6enn5+fk5OTh4eHi4uLZ2dnX19fW1tbT09PS0tLPz8/Nzc3Ozs7Ly8vHx8fIyMjGxsbDw8PExMTBwcHAwMC9vb2+vr67u7u8vLy5ubm6urq3t7e4uLizs7OwsLCtra2srKypqamnp6empqajo6OdnZ2bm5ucnJyZmZmampqYmJiVlZWWlpaPj4+QkJCOjo6Li4uJiYmKioqFhYWDg4OBgYF+fn54eHh3d3d0dHRzc3NwcHBxcXFubm5tbW1qampra2toaGhpaWlnZ2dkZGRlZWViYmJjY2NgYGBfX19cXFxYWFhSUlJTU1NISEhDQ0NAQEA8PDwpKSkmJiYiIiIfHx8ZGRkUFBQSEhIQEBAODg4ICAgHBwcAAAABAQECAgIDAwMEBAQMpqGoAAAAaXRSTlMABAYGCAgIDBAWGBgaHCAiIiosLjAyNDY2ODw8PkBAQkRGRkhISkpMTFBUVlhaXF5gZmhoampsbm50dHZ4enp+gYOFi42PkZOTlZeZmZubnZ+foaGjpaersbG7wcPH293h5evv8fP1+/2IDLwBAAACG0lEQVR4Aa2WZ1NVMRRFs0AfdiyKBTsoWETEAhYsWMQiFsWOiopyFP//V7kT792EGULOG9cXMm9Ye5+bB8kNLlg/cv/pxCCEtmDrrEUeQzv+mIlO/P64LaWDNn1/gnx3Qt5Xgs+/O5rupNc/Bh1pgs8fJATWKAG/vwhrreYlfj9NwOtH9BSn3H6k2clJny8Yjp++WcW/pu8v8QNX48ev8n7fiv52i4znA9L5BTvsH9tCjivy4fBeWN5v8+R8Pss/Xv3cgPojvSEH8k/EFcv8SUoCZhrfjmh+/SGvGnCm8e20+gv8wLwtcrbV+MbS/heE1Zg2syH5doGi+cWmtP8yZfMLPlxM/cL5oROIS38/3Phqi7zvQb6jnwGr+ZL4rYNvi/zr1nAu8fdZ0fw6P9L9b/Wa+sv8odZ/7KfPGp6X+cOJHz5azUiRf5LUD3S/q5ZztynyByHxK4AO2R6/dXRWnsvX/u/33t/9y77/GVx+IOmvwHd/9cg/EBddLj901z78iauNef9S6gd+1P6uopeAzYlf0fnTzM7r/Fgg5/Mp9SvY2Q86Px5mA7oy92fREwxl7u/IWD5goj7yV/KfEbLcib+2LgjH/aV3gNcE4bq/dltkCle/wJQgX/2Of8QpPPMLvinBM7/gV208wtEvYKF2phnw9Cvhtwm3nyT459dTtN+vGfz9Ar7Lv+fwBbcsMrfH5Qs4dPPJg9EtPv0vbCAQGW6wa0oAAAAASUVORK5CYII=';
 
 	var linkIconSmall = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAABO0lEQVR42pWUz2rCQBDGQ4wevHkUIpicerc9Su8K7Ts1iGf/HNqrr+AD2IvSUrWnngX7Am0FifXQfls+4SskWXfgB5nszmTm29l4nps1wQocwQFMQNUxh+eDBPyAHdjz+RmUXRKNGPgNYnBF3/BwToIADBiwAaGsXUplVrvjxndqpBaBr3MS1aX8BngBU66FbNOs9W2JzBdTcA1mDFqysg39HqjkJbigoMY6YM6gR1a2pT8GpTxhT5qkTLKmvwBtaXVY1MpANt5KJa9MmtJP+NHMYRvJ6TREE1NJl/tMu62isU9kTpo8nZMmN6wktp3MUib2b9iCIJjyfSittmyJjrw7UUalW9HEauYWf4KavAtlToZ5wv5X2fcnDHhjskgmduxyq83/5ImBH3J3ejxNJyujsnsRtl809ln2C3fcZBrgCT7NAAAAAElFTkSuQmCC';
 
@@ -317,7 +313,6 @@ var mainCode = function(){
 		export_toDropbox : "Export all to Dropbox",
 		export_toDropboxEnterFileName : "Please enter the file name",
 		export_toDropboxPerformFilteredExport : "Perform filtered export to Dropbox",
-		export_toGistPerformFilteredExport : "Perform filtered export as shareable link",
 		export_toServer_result : "The server said",
 		import_explain : "You can import backups that were previously exported using GCComment. The only file formatted supported right now is GCC, i.e., GCComments own file format. After pressing the 'Execute Import' button, the import will be parsed. Comments will be imported, unless there is already a comment with a newer time stamp. So more recent comments cannot be overwritten by older backups.",
 		import_choose : "Choose GCC file to import from (*.gcc):",
@@ -352,7 +347,6 @@ var mainCode = function(){
 		detail_finaldelete : "Delete final coordinate",
 		detail_lastsaved : "last saved",
 		detail_edit : "Edit comment",
-		detail_share : "Share comment",
 		detail_delete : "Delete comment",
 		detail_thestate : "State",
 		detail_save : "Save comment",
@@ -392,10 +386,6 @@ var mainCode = function(){
 		archived_filter_only_archived : "only archived",
 		shareImportNew : "A site wants to import a new comment:\n%name%\nAllow?",
 		shareImportOverride : "A site wants to override one of your comments:\n%name%\nAllow?",
-		gistNotice : "If you share comments as links GCComment will uploaded them as secret anonymous gists (they are not public, but also not deleteable)",
-		gistNoticeMoreInfo : "[More info]",
-		gistNoticeHide : "[Do not show again]",
-		gistNoticeLink : "https://github.com/lukeIam/gcc/wiki/ShareLinksGerman#mehr-informationen-zum-teilen-von-kommentaren-als-links"
 	};
 	languages[SETTINGS_LANGUAGE_DE] = {
 		mycomments : "Meine Kommentare",
@@ -466,7 +456,6 @@ var mainCode = function(){
 		export_toDropbox : "Alle zur Dropbox exportieren",
 		export_toDropboxEnterFileName : "Bitte Dateinamen eingeben",
 		export_toDropboxPerformFilteredExport : "Gefilterten Export zu Dropbox durchführen",
-		export_toGistPerformFilteredExport : "Gefilterter Export als teilbarer Link",
 		export_toServer_result : "Der Server sagte",
 		import_explain : "Es können Sicherungskopien importiert werden, die zuvor von GCComment exportiert wurden. Es wird nur das GCComment-eigene Dateiformat unterstützt (*.gcc). Nach dem Drücken des 'Import durchführen'-Knopf wird der Import geprüft. Die Kommentare werden importiert solange nicht schon ein Kommentar mit einem neueren Zeitstempel vorhanden ist. Daher können aktuellere Kommentare nicht durch ältere überschrieben werden.",
 		import_choose : "Wähle GCC-Datei zum Importieren (*.gcc):",
@@ -501,7 +490,6 @@ var mainCode = function(){
 		detail_finaldelete : "Finalkoordinate löschen",
 		detail_lastsaved : "zuletzt gespeichert",
 		detail_edit : "Kommentar editieren",
-		detail_share : "Kommentar teilen",
 		detail_delete : "Kommentar löschen",
 		detail_thestate : "Kommentarstatus",
 		detail_save : "Kommentar speichern",
@@ -541,10 +529,6 @@ var mainCode = function(){
 		archived_filter_only_archived : "nur archivierte",
 		shareImportNew : "Eine Seite möchte einen neuen Kommentar importieren:\n%name%\nErlauben?",
 		shareImportOverride : "Eine Seite möchte einen deiner Kommentare überschreiben:\n%name%\nErlauben?",
-		gistNotice : "Wenn Kommentare als Link geteilt werden, läd GCComment diese als geheime und anonyme Gists hoch (diese sind nicht öffentlich, können aber auch nicht gelöscht werden)",
-		gistNoticeMoreInfo : "[Mehr Informationen]",
-		gistNoticeHide : "[Zeige diesen Hinweis nicht mehr]",
-		gistNoticeLink : "https://github.com/lukeIam/gcc/wiki/ShareLinksGerman#mehr-informationen-zum-teilen-von-kommentaren-als-links"
 	};
 	var langsetting = GM_getValue(SETTINGS_LANGUAGE);
 	var lang = languages[SETTINGS_LANGUAGE_EN];
@@ -608,7 +592,7 @@ var mainCode = function(){
 					return doLoadCommentFromGUID(guid);
 			};
 
-			if(browser === "FireFox" && window.wrappedJSObject){
+			if (needsPageBridge && window.wrappedJSObject) {
 				exportFunction(getGCommentFunction, unsafeWindow, {
 					defineAs : "getGCComment"
 				});
@@ -622,22 +606,8 @@ var mainCode = function(){
 		appendCSS("text", "a.gccselect {padding-bottom:5px;background-color:#EBECED;outline:1px solid #D7D7D7}",
 				null);
 
-		if(typeof(nyroModalCss) !== "undefined"){
-			appendCSS("text", nyroModalCss);
-		}
-
 		homelat = GM_getValue('HOMELAT');
 		homelng = GM_getValue('HOMELNG');
-
-		//add gist banner
-		if(! GM_getValue("gistNoticeHidden", false)){
-			$('#Navigation').after('<div id="gistNotice" style="text-align: center; background-color: #C2E0FF;"> <span>'+lang.gistNotice+'</span><br><a style="font-weight: bold;" target="_blank" href="'+lang.gistNoticeLink+'"><span>'+lang.gistNoticeMoreInfo+'</span></a><br><a style="cursor: pointer; font-weight: bold;" id="gistNoticeHide"><span>'+lang.gistNoticeHide+'</span></a></div>');
-
-			$('#gistNoticeHide').click(function(){
-				GM_setValue("gistNoticeHidden", true);
-				$('#gistNotice').slideUp("fast");
-			});
-		}
 
 		// starting the GCC
 		log('debug', 'found URL: ' + document.URL);
@@ -712,7 +682,7 @@ var mainCode = function(){
 			GM_setValue(INDEXBUILT, 'done');
 		}
 
-		var indexRepaired = GM_getValue(INDEXREPAIRED);
+		var indexRepaired = parseInt(GM_getValue(INDEXREPAIRED), 10);
 		if (!indexRepaired) {
 			indexRepaired = 0;
 		}
@@ -760,6 +730,59 @@ var mainCode = function(){
 
 		if (indexRepaired < 77) {
 			indexRepaired = 77;
+		}
+
+		// Version 104: jeden Datensatz zusaetzlich unter dem GC-Code ablegen.
+		// Der GUID-Schluessel bleibt in dieser Version bestehen und wird weiter
+		// mitgeschrieben; entfernt wird er erst in 105. Der Durchlauf ist
+		// wiederholbar - bricht er ab, macht der naechste Seitenaufruf weiter.
+		if (indexRepaired < 104) {
+			log('info', 'Performing maintenance of version 104. Storing comments under their GC code.');
+
+			var migrated = 0;
+			var duplicates = 0;
+			var withoutGCCode = 0;
+
+			var v104keys = GM_listValues();
+			for (var k = 0; k < v104keys.length; k++) {
+				if (v104keys[k].indexOf(COMPREFIX) !== 0) {
+					continue;
+				}
+
+				var oldComment = doLoadCommentFromGUID(v104keys[k].substr(COMPREFIX.length));
+				if (!oldComment) {
+					continue;
+				}
+
+				if (!oldComment.gccode) {
+					// Ohne GC-Code gibt es keinen neuen Schluessel. Der Datensatz bleibt
+					// unangetastet unter der GUID liegen, damit nichts verloren geht.
+					log('debug', 'Maintenance 104: ' + v104keys[k] + ' has no GC code, left untouched');
+					withoutGCCode++;
+					continue;
+				}
+
+				var existing = doLoadCommentV2(oldComment.gccode);
+				if (existing) {
+					// Zwei GUIDs auf denselben GC-Code - der juengere Eintrag gewinnt,
+					// der andere bleibt unter seinem GUID-Schluessel erhalten.
+					var existingTime = parseInt(existing.saveTime, 10) || 0;
+					var candidateTime = parseInt(oldComment.saveTime, 10) || 0;
+					if (existingTime >= candidateTime) {
+						continue;
+					}
+					log('debug', 'Maintenance 104: ' + oldComment.gccode
+							+ ' stored twice, keeping the newer record');
+					duplicates++;
+				}
+
+				doSaveCommentV2(oldComment);
+				migrated++;
+			}
+
+			log('info', 'Maintenance 104 complete. Migrated: ' + migrated + ', duplicates resolved: '
+					+ duplicates + ', without GC code: ' + withoutGCCode);
+			indexRepaired = 104;
 		}
 
 		log('debug', 'Setting indexRepaired to new value: ' + indexRepaired);
@@ -1136,21 +1159,6 @@ var mainCode = function(){
 
 			appendCheckBox(configDiv, AUTO_UPLOAD_CACHE_NOTES, lang.settings_saveCacheNotes);
 
-			var IdResoverContent = "";
-			function updateIdResoverContent(){
-				var IdResoverContentActive = IdResoverContent ='<div id="divIdResoverSettings"> <span>Use a static ID for exports (uploads the the IDs to IDResolver).</span> <br> <span>You are using the IDReclover autoupload with</span><br><span style="font-weight: bold;">static-ID: '+ GM_getValue("idResolverId", "") +'</span><br><span style="font-weight: bold;">secret: '+ GM_getValue("idResolverSecret", "") +'</span><br><span style="font-weight: bold;">Permanet link: </span><img  style="height: 2em; width: 2em; vertical-align: middle; margin-bottom: 0.5em; margin-left: 0.5em;" src="'+linkIcon+'"></img><input style="font-size: small; margin-left: 0.5em; width: 26em; color: darkgray;" id="shareLinkPerm" readonly="readonly" value="http://gccs.lukeIam.de#'+ GM_getValue("idResolverId", "").trim() +'"></input><a href="#shareLinkPermQRBig"><div id="shareLinkPermQR" style="height: 2.5em; width: 2.5em; vertical-align: middle; margin-bottom: 0.5em; margin-left: 0.5em; display: inline-block; cursor:pointer;"></div></a><div style="display:none;"><div style="padding:0px;margin:0px;height:600px;width:600px;" id="shareLinkPermQRBig"></div></div><br><a id="divIdResoverSettingsRemove" style="cursor:pointer;"><span style="font-weight: bold;">Remove</span></a> </div>';
-				var IdResoverContentInactive = '<div id="divIdResoverSettings"> <span>Use a static ID for exports (uploads the the IDs to IDResolver).</span> <br> <span>To activate enter your id and secret or create a new id:</span> <br> <label for="divIdResoverSettingsId" style="font-weight: bold;">ID:</label><input type="" size="36" id="divIdResoverSettingsId" style="margin:3px"> <label for="divIdResoverSettingsSecret" style="font-weight: bold;">Secret:</label><input type="" size="20" id="divIdResoverSettingsSecret" style="margin:3px"><a id="divIdResoverSettingsLogin" style="cursor:pointer;"><span style="font-weight: bold;">Ok</span></a> <span> | </span> <a id="divIdResoverSettingsCreate" style="cursor:pointer;"><span style="font-weight: bold;">Create</span></a> </div>';
-
-				if(GM_getValue("idResolverId", "") !== "" && GM_getValue("idResolverSecret", "") !== ""){
-					IdResoverContent = IdResoverContentActive;
-				}
-				else{
-					IdResoverContent = IdResoverContentInactive;
-				}
-			}
-			updateIdResoverContent();
-			$(configDiv).append("<br>").append(IdResoverContent).append("<br>");
-
 			configDiv.appendChild(document.createTextNode(lang.settings_language + ":"));
 			var languageSelector = document.createElement('select');
 			languageSelector.setAttribute("name", "languageSelector");
@@ -1180,89 +1188,6 @@ var mainCode = function(){
 			configDiv.appendChild(languageSelector);
 
 			gccRoot.appendChild(configDiv);
-
-			setTimeout(function(){
-				$('#shareLinkPermQR').qrcode({
-					width: $('#shareLinkPermQR').width(),
-					height: $('#shareLinkPermQR').height(),
-					text: "http://gccs.lukeIam.de#"+GM_getValue("idResolverId", "")
-				}).parent().nyroModal();
-				$('#shareLinkPermQRBig').qrcode({
-					width: $('#shareLinkPermQRBig').width(),
-					height: $('#shareLinkPermQRBig').height(),
-					text: "http://gccs.lukeIam.de#"+GM_getValue("idResolverId", "")
-				});
-			},1000);
-
-			function divIdResoverSettingsSetupClickHandler(){
-				$('#divIdResoverSettingsRemove').unbind("click").click(function(){
-					GM_setValue("idResolverId", "");
-					GM_setValue("idResolverSecret", "");
-					updateIdResoverContent();
-					$('#divIdResoverSettings').replaceWith(IdResoverContent);
-					divIdResoverSettingsSetupClickHandler();
-				});
-
-				$('#divIdResoverSettingsLogin').unbind("click").click(function(){
-					GM_xmlhttpRequest({
-						url: "https://idresolver.azurewebsites.net/check",
-						onload: function(e){
-							GM_setValue("idResolverId", document.getElementById("divIdResoverSettingsId").value.trim());
-							GM_setValue("idResolverSecret", document.getElementById("divIdResoverSettingsSecret").value.trim());
-							updateIdResoverContent();
-							$('#divIdResoverSettings').replaceWith(IdResoverContent);
-							divIdResoverSettingsSetupClickHandler();
-
-							$('#shareLinkPermQR').qrcode({
-								width: $('#shareLinkPermQR').width(),
-								height: $('#shareLinkPermQR').height(),
-								text: "http://gccs.lukeIam.de#"+document.getElementById("divIdResoverSettingsId").value.trim()
-							}).parent().nyroModal();
-							$('#shareLinkPermQRBig').qrcode({
-								width: $('#shareLinkPermQRBig').width(),
-								height: $('#shareLinkPermQRBig').height(),
-								text: "http://gccs.lukeIam.de#"+document.getElementById("divIdResoverSettingsId").value.trim()
-							});
-						},
-
-						onerror: function(e){
-							document.getElementById("divIdResoverSettingsId").value = "";
-							document.getElementById("divIdResoverSettingsSecret").value = "";
-							alert("Failed");
-							console.log(e.statusText);
-						},
-						headers:{
-							"Content-Type": "application/json"
-						},
-						data: JSON.stringify( {
-							Id: document.getElementById("divIdResoverSettingsId").value.trim(),
-							SecretToken: document.getElementById("divIdResoverSettingsSecret").value.trim(),
-							TargetId: ""
-						}),
-						method: "POST"
-					});
-				});
-
-				$('#divIdResoverSettingsCreate').unbind("click").click(function(){
-					GM_xmlhttpRequest({
-						url: "https://idresolver.azurewebsites.net/register",
-						onload: function(e){
-							var data = JSON.parse(e.responseText);
-							GM_setValue("idResolverId", data.Id);
-							GM_setValue("idResolverSecret", data.SecretToken);
-							updateIdResoverContent();
-							$('#divIdResoverSettings').replaceWith(IdResoverContent);
-							divIdResoverSettingsSetupClickHandler();
-						},
-						onerror: function(e){
-							alert("Failed");
-							console.log(e.statusText);
-						},
-						method: "GET"
-					});
-				});
-			}
-			divIdResoverSettingsSetupClickHandler();
 
 			//
 			// gccommenttablediv
@@ -1355,13 +1280,6 @@ var mainCode = function(){
 			exportDropboxButton.setAttribute('style', 'margin:5px');
 			exportDiv.appendChild(exportDropboxButton);
 
-			exportGistButton = document.createElement('input');
-			exportGistButton.setAttribute('type', 'button');
-			exportGistButton.setAttribute('value', lang.export_toGistPerformFilteredExport);
-			exportGistButton.addEventListener('click', performFilteredGistExport, false);
-			exportGistButton.setAttribute('style', 'margin:5px');
-			exportDiv.appendChild(exportGistButton);
-
 
 			dropboxExportLink = document.createElement('input');
 			dropboxExportLink.setAttribute('type', 'button');
@@ -1449,12 +1367,7 @@ var mainCode = function(){
 			gistImportLink = document.createElement('input');
 			gistImportLink.setAttribute('id', 'gistImportLink');
 			gistImportLink.setAttribute('type', '');
-			if(GM_getValue("idResolverId", "") !== ""){
-				gistImportLink.setAttribute('value', "http://gccs.lukeIam.de#" + GM_getValue("idResolverId", "").trim());
-			}
-			else{
-				gistImportLink.setAttribute('value', "http://gcc.lukeIam.de#gccc");
-			}
+			gistImportLink.setAttribute('value', "http://gcc.lukeIam.de#gccc");
 			gistImportLink.setAttribute('style', "margin-right: 0.5em; width: 25em; color: darkgray;");
 			importDiv.appendChild(gistImportLink);
 			$('#gistImportLink').before('<img  style="height: 18px; width: 18px; vertical-align: middle; margin-right: 0.5em; margin-bottom: 0.2em;" src="'+linkIconSmall+'"></img>');
@@ -1551,6 +1464,15 @@ var mainCode = function(){
 
 	var dropbox_client = null;
 
+	// Dropbox nutzt seit 2021 kurzlebige Access-Tokens; der Implicit-Flow ist abgeloest
+	// durch Authorization Code + PKCE mit Refresh-Token.
+	var DROPBOX_APP_KEY = 'w23bgpsespnddow';
+	var DROPBOX_REDIRECT_URI = 'https://www.geocaching.com/account/dashboard?AppId=GCComment';
+	var DB_ACCESS_TOKEN = 'Db_Access_Token';
+	var DB_REFRESH_TOKEN = 'Db_Refresh_Token';
+	var DB_ACCESS_EXPIRES = 'Db_Access_Token_Expires';
+	var DB_CODE_VERIFIER = 'Db_Code_Verifier';
+
 	// Dropbox Access Token Hilfsfunktion.
     (function(window){
         window.utils = {
@@ -1576,22 +1498,54 @@ var mainCode = function(){
         };
     })(window);
 
-// Checken ob ein Access Token übergeben wurde und dies auch für GCC ist.
-    log("debug", "Dropbox Access Token suchen");
-    var Db_Access_Token = utils.parseQueryString(window.location.hash).access_token;
-    var AppId = utils.parseQueryString(window.location.search).AppId;
+	function dropboxCreateAuth() {
+		var opts = { clientId: DROPBOX_APP_KEY };
+		var refreshToken = GM_getValue(DB_REFRESH_TOKEN, '');
+		var accessToken = GM_getValue(DB_ACCESS_TOKEN, '');
+		var expiresAt = parseInt(GM_getValue(DB_ACCESS_EXPIRES, '0'), 10);
 
-    if (AppId && AppId == 'GCComment') {
-		if (Db_Access_Token) {
-			// zurück von DB mit Access Token, speichern und weiter
-			GM_setValue('Db_Access_Token', Db_Access_Token);
-		} else {
-			// Maybe the user denies Access (this is mostly an unwanted click), so show him, that he
-			// has refused to give us access to his dropbox and that he can re-auth if he want to.
-			error = utils.parseQueryString(window.location.hash).error_description;
-			if (error) alert('We received the following error from dropbox: "' + error + '" If you think this is a mistake, you can try to re-authenticate in the sync menue of GClh.');
+		if (refreshToken) opts.refreshToken = refreshToken;
+		if (accessToken) opts.accessToken = accessToken;
+		if (expiresAt) opts.accessTokenExpiresAt = new Date(expiresAt);
+
+		return new Dropbox.DropboxAuth(opts);
+	}
+
+	function dropboxStoreTokens(auth) {
+		if (auth.getAccessToken()) GM_setValue(DB_ACCESS_TOKEN, auth.getAccessToken());
+		if (auth.getRefreshToken()) GM_setValue(DB_REFRESH_TOKEN, auth.getRefreshToken());
+		var expiresAt = auth.getAccessTokenExpiresAt();
+		GM_setValue(DB_ACCESS_EXPIRES, expiresAt ? String(expiresAt.getTime()) : '0');
+	}
+
+	// Rueckkehr von Dropbox: ?code=... gegen Access- und Refresh-Token tauschen.
+	log("debug", "Dropbox Auth-Callback pruefen");
+	var dropboxCallback = utils.parseQueryString(window.location.search);
+
+	if (dropboxCallback.AppId === 'GCComment') {
+		if (dropboxCallback.code) {
+			var pendingAuth = new Dropbox.DropboxAuth({ clientId: DROPBOX_APP_KEY });
+			pendingAuth.setCodeVerifier(GM_getValue(DB_CODE_VERIFIER, ''));
+
+			pendingAuth.getAccessTokenFromCode(DROPBOX_REDIRECT_URI, dropboxCallback.code)
+				.then(function(response) {
+					var token = response.result;
+					GM_setValue(DB_ACCESS_TOKEN, token.access_token);
+					if (token.refresh_token) GM_setValue(DB_REFRESH_TOKEN, token.refresh_token);
+					GM_setValue(DB_ACCESS_EXPIRES, String(Date.now() + ((token.expires_in || 14400) * 1000)));
+					GM_deleteValue(DB_CODE_VERIFIER);
+					log("debug", "Dropbox: Token-Tausch erfolgreich");
+				})
+				.catch(function(error) {
+					log("error", "Dropbox: Token-Tausch fehlgeschlagen: " + error);
+					alert('Die Dropbox-Anmeldung ist fehlgeschlagen. Bitte im Import- oder Export-Bereich erneut versuchen.');
+				});
+		} else if (dropboxCallback.error_description) {
+			alert('Dropbox meldet: "' + dropboxCallback.error_description + '" Falls das ein Versehen war, kann die Anmeldung im Import- oder Export-Bereich wiederholt werden.');
 		}
 	}
+
+
 	function checkDropbox() {
 		doDropboxAction()
             .done(function(){
@@ -1601,7 +1555,7 @@ var mainCode = function(){
 
 				dropbox_client.filesListFolder({path: ''})
 				.then(function(response) {
-					directoryEntries = response.entries;
+					directoryEntries = response.result.entries;
 					waitingTag.setAttribute("src", successIcon);
 					setTimeout(function() {
 						$("#waiting").fadeOut('slow', function() {
@@ -1687,7 +1641,7 @@ var mainCode = function(){
 					reader.addEventListener("loadend", function(){
 						importText.value = reader.result;
 					});
-					reader.readAsText(response.fileBlob);
+					reader.readAsText(response.result.fileBlob);
 					waitingTag.setAttribute("src", successIcon);
 					setTimeout(function() {
 						$("#waiting").fadeOut('slow', function() {
@@ -1741,70 +1695,68 @@ var mainCode = function(){
 			});
 		};
 
-		var possibleId = $('#gistImportLink')[0].value.trim().replace("http://","").replace("gcc.lukeIam.de","").replace("gccs.lukeIam.de","").replace(/\//g,"").replace(/#/g,"").toLowerCase();
+		var possibleId = $('#gistImportLink')[0].value.trim().replace("http://","").replace("gcc.lukeIam.de","").replace(/\//g,"").replace(/#/g,"").toLowerCase();
 
-		if(possibleId.indexOf("-") !== -1){
-			GM_xmlhttpRequest({
-				url: "https://idresolver.azurewebsites.net/"+possibleId,
-				onload: function(e){
-					log("debug", "IDResolver ID found");
-					loadCommentFunction(e.responseText.replace(/"/g, "").trim());
-				},
-				onerror: function(e){
-					log("debug", "IDResolver ID not found");
-					waitingTag.setAttribute("src", errorIcon);
-				},
-				method: "GET"
-			});
-		}
-		else{
-			loadCommentFunction(possibleId);
-		}
+		loadCommentFunction(possibleId);
 }
 	function DropboxShowAuthLink() {
-		var APP_Key = 'w23bgpsespnddow';
-		dropbox_auth_link = new Dropbox({clientId: APP_Key});
+		var auth = new Dropbox.DropboxAuth({ clientId: DROPBOX_APP_KEY });
 
-		if ((document.URL.search("\/account\/dashboard") >= 0) || (document.URL.search("\/dashboard\/$") >= 0)
-				|| (document.URL.search("\/dashboard\/\#") >= 0) || (document.URL.search("\/dashboard\/\\?.*=.*") >= 0)) {
-			log('debug', 'matched gccommentOnProfilePage');
-			Db_AuthLinkImport = document.getElementById('dropboxAuthLinkImport');
-            Db_AuthLinkImport.href = dropbox_auth_link.getAuthenticationUrl('https://www.geocaching.com/account/dashboard?AppId=GCComment');
-            Db_AuthLinkExport = document.getElementById('dropboxAuthLinkExport');
-            Db_AuthLinkExport.href = dropbox_auth_link.getAuthenticationUrl('https://www.geocaching.com/account/dashboard?AppId=GCComment');
-		}
+		// PKCE: getAuthenticationUrl liefert seit SDK 9 ein Promise, weil der
+		// Code-Challenge-Hash im Browser asynchron berechnet wird.
+		auth.getAuthenticationUrl(DROPBOX_REDIRECT_URI, undefined, 'code', 'offline', undefined, 'none', true)
+			.then(function(authUrl) {
+				GM_setValue(DB_CODE_VERIFIER, auth.getCodeVerifier());
+
+				var linkImport = document.getElementById('dropboxAuthLinkImport');
+				var linkExport = document.getElementById('dropboxAuthLinkExport');
+				if (linkImport) linkImport.href = authUrl;
+				if (linkExport) linkExport.href = authUrl;
+			})
+			.catch(function(error) {
+				log("error", "Dropbox: Auth-URL konnte nicht erzeugt werden: " + error);
+			});
 
 		// Import Seite
-    $(Db_AuthLinkImport).show();
+		$('#dropboxAuthLinkImport').show();
 		dropboxImportLink.setAttribute('disabled', 'disabled');
- 		dropboxCheck.setAttribute('disabled', 'disabled');
- 		dropboxSelect.setAttribute('disabled', 'disabled');
+		dropboxCheck.setAttribute('disabled', 'disabled');
+		dropboxSelect.setAttribute('disabled', 'disabled');
 
 		// Export Seite
-		$(Db_AuthLinkExport).show();
+		$('#dropboxAuthLinkExport').show();
 		dropboxExportLink.setAttribute('disabled', 'disabled');
- 		exportDropboxButton.setAttribute('disabled', 'disabled');
-}
+		exportDropboxButton.setAttribute('disabled', 'disabled');
+	}
 
 	function doDropboxAction() {
-        var deferred = $.Deferred();
-        Db_Access_Token = GM_getValue('Db_Access_Token');
-        if (Db_Access_Token) {
-            dropbox_client = new Dropbox({accessToken: Db_Access_Token});
+		var deferred = $.Deferred();
 
-            dropbox_client.usersGetCurrentAccount()
-                .then(function(response) {
-                    deferred.resolve();
-                })
-                .catch(function(error) {
-					log("debug", error);
-                    deferred.reject();
-                });
-        } else {
-            dropbox_client = null;
-            deferred.reject();
-        }
-        return deferred.promise();
+		if (!GM_getValue(DB_REFRESH_TOKEN, '') && !GM_getValue(DB_ACCESS_TOKEN, '')) {
+			dropbox_client = null;
+			deferred.reject();
+			return deferred.promise();
+		}
+
+		var auth = dropboxCreateAuth();
+
+		// holt bei abgelaufenem Access-Token selbstaendig ein neues ueber den Refresh-Token
+		auth.checkAndRefreshAccessToken()
+			.then(function() {
+				dropboxStoreTokens(auth);
+				dropbox_client = new Dropbox.Dropbox({ auth: auth });
+				return dropbox_client.usersGetCurrentAccount();
+			})
+			.then(function() {
+				deferred.resolve();
+			})
+			.catch(function(error) {
+				log("debug", error);
+				dropbox_client = null;
+				deferred.reject();
+			});
+
+		return deferred.promise();
 	}
 
 	function toggleExportFilterOptions() {
@@ -2363,14 +2315,6 @@ var mainCode = function(){
 			EditComment.appendChild(imgEdit);
 			EditComment.addEventListener('mouseup', editComment, false);
 
-			ShareComment = document.createElement('a');
-			var imgShare = document.createElement('img');
-			imgShare.src = commentIconShare;
-			imgShare.title = lang.detail_share;
-			imgShare.setAttribute('style', 'cursor:pointer');
-			ShareComment.appendChild(imgShare);
-			ShareComment.addEventListener('mouseup', function(){shareComment(currentCacheGUID);}, false);
-
 			EditCancelComment = document.createElement('a');
 			var imgEditCancel = document.createElement('img');
 			imgEditCancel.src = commentIconEditCancel;
@@ -2387,13 +2331,11 @@ var mainCode = function(){
 				if (currentComment == null) {
 					AddComment.style.display = 'inline';
 					EditComment.style.display = 'none';
-					ShareComment.style.display = 'none';
 					ArchiveComment.style.display = 'none';
 					detailCommentTextArea.value = "";
 				} else {
 					AddComment.style.display = 'none';
 					EditComment.style.display = 'inline';
-					ShareComment.style.display = 'inline';
 					ArchiveComment.style.display = 'inline';
 					DeleteComment.style.display = 'inline';
 					detailCommentTextArea.value = currentComment.commentValue;
@@ -2449,7 +2391,7 @@ var mainCode = function(){
 							});
 						};
 
-						if(browser === "FireFox"){
+						if (needsPageBridge) {
 							appendScript("text", "(" + pageMethodCaller.toString() + ")('" + unsafeWindow.userToken.replace(/'/g,"%27") + "'.replace('%27','\\''));");
 						}
 						else{
@@ -2502,7 +2444,6 @@ var mainCode = function(){
 					detailCommentTextPane.style.display = 'none';
 					AddComment.style.display = 'inline';
 					EditComment.style.display = 'none';
-					ShareComment.style.display = 'none';
 					ArchiveComment.style.display = 'none';
 					SaveComment.style.display = 'none';
 					DeleteComment.style.display = 'none';
@@ -2608,7 +2549,6 @@ var mainCode = function(){
 			header.appendChild(document.createTextNode('   '));
 			header.appendChild(EditComment);
 			header.appendChild(document.createTextNode('   '));
-			header.appendChild(ShareComment);
 			header.appendChild(document.createTextNode('   '));
 			header.appendChild(SaveComment);
 			header.appendChild(document.createTextNode('   '));
@@ -2662,7 +2602,6 @@ var mainCode = function(){
 
 				AddComment.style.display = 'none';
 				EditComment.style.display = "inline";
-				ShareComment.style.display = "inline";
 				ArchiveComment.style.display = "inline";
 				EditCancelComment.style.display = "none";
 				SaveComment.style.display = 'none';
@@ -2677,7 +2616,6 @@ var mainCode = function(){
 			} else {
 				AddComment.style.display = 'inline';
 				EditComment.style.display = "none";
-				ShareComment.style.display = "none";
 				ArchiveComment.style.display = "none";
 				EditCancelComment.style.display = "none";
 				SaveComment.style.display = 'none';
@@ -2754,98 +2692,47 @@ var mainCode = function(){
 			}
 
 			if (currentComment
-					&& ((currentComment.lat && currentComment.lng) || (currentComment.waypoints && (currentComment.waypoints.length > 0)))
-					&& typeof(unsafeWindow.L)!=="undefined") {
-				var modifyCachePageMap = function(){
-				unsafeWindow.L.OrigMap = unsafeWindow.L.Map;
-				unsafeWindow.L.Map = function(id, params) {
-					var map = new unsafeWindow.L.OrigMap(id, params);
+					&& ((currentComment.lat && currentComment.lng) || (currentComment.waypoints && (currentComment.waypoints.length > 0)))) {
 
-					if (id === 'map_canvas' || id === 'map_canvas2' || id === 'map_preview_canvas')
-						setTimeout(function() {
-							var bounds = new unsafeWindow.L.LatLngBounds();
-							var aWaypoints = [];
-
-							var latlngHome = null;
-							if (currentComment.origlat && currentComment.origlng) {
-								latlngHome = new unsafeWindow.L.LatLng(currentComment.origlat, currentComment.origlng);
-								aWaypoints.push(latlngHome);
-								bounds.extend(latlngHome);
-							}
-
-							for (var m = 0; currentComment.waypoints && (m < currentComment.waypoints.length); m++) {
-								var coords = parseCoordinates(currentComment.waypoints[m].coordinate);
-								if (coords.length === 2) {
-									var latlngWaypoint = new unsafeWindow.L.LatLng(coords[0], coords[1]);
-									var markerWaypoint = new unsafeWindow.L.Marker(latlngWaypoint, {
-										icon : new unsafeWindow.L.Icon({
-											iconSize : new unsafeWindow.L.Point(16, 16),
-											iconAnchor : new unsafeWindow.L.Point(8, 8),
-											iconUrl : waypointIcon
-										}),
-										title : currentComment.waypoints[m].name,
-										clickable : false
-									});
-									map.addLayer(markerWaypoint);
-									aWaypoints.push(latlngWaypoint);
-									bounds.extend(latlngWaypoint);
-								}
-							}
-
-							if (currentComment.lat && currentComment.lng) {
-								var latlngFinal = new unsafeWindow.L.LatLng(currentComment.lat, currentComment.lng);
-								var markerFinal = new unsafeWindow.L.Marker(latlngFinal, {
-									icon : new unsafeWindow.L.Icon({
-										iconSize : new unsafeWindow.L.Point(22, 22),
-										iconAnchor : new unsafeWindow.L.Point(11, 11),
-										iconUrl : finalIcon
-									}),
-									title : lang.finale,
-									clickable : false
-								});
-								map.addLayer(markerFinal);
-								bounds.extend(latlngFinal);
-								aWaypoints.push(latlngFinal);
-							}
-
-							// add line between waypoints
-							map.addLayer(new unsafeWindow.L.Polyline(aWaypoints, {
-								color : "#000000",
-								weight : 1,
-								clickable : false,
-								opacity : 1,
-								fillOpacity : 1
-							}));
-
-							map.fitBounds(bounds);
-						}, 1000);
-
-					return map;
+				// Die Minimap der Cacheseite ist eine React-Komponente, die ihr eigenes
+				// Leaflet 1.9 im Webpack-Bundle mitbringt. Das globale L (noch 0.7.2)
+				// gehoert nicht dazu, und der Kartencontainer hat keine ID mehr. Wir holen
+				// uns deshalb das gebuendelte Leaflet und haengen uns an Map.prototype,
+				// statt wie frueher den Konstruktor von window.L zu ersetzen.
+				//
+				// Der Code laeuft als injiziertes Seitenskript: unter Firefox liesse die
+				// Xray-Trennung ein Patchen von Seitenobjekten aus der Sandbox heraus nicht
+				// zu, die Injektion gilt deshalb fuer beide Browser gleichermassen.
+				var mapPayload = {
+					home : null,
+					waypoints : [],
+					finalCoords : null,
+					waypointIcon : waypointIcon,
+					finalIcon : finalIcon,
+					finalTitle : lang.finale
 				};
 
-//					if(browser === "Chrome"){
-						$('#map_canvas').replaceWith('<div style="width: 325px; height: 325px;" id="map_canvas"></div>');
-						// setStaticMap();
-//					}
-				};
-
-/*				if(browser === "FireFox"){
-					var code = document.createElement('script');
-					code.setAttribute('type', 'text/javascript');
-					code.textContent = "var browser=\""+browser+"\";var unsafeWindow = unsafeWindow||window; var currentComment = JSON.parse(decodeURIComponent(\"" + encodeURIComponent(JSON.stringify(currentComment)) + "\"));";
-					code.textContent += "var lang = JSON.parse(decodeURIComponent(\"" + encodeURIComponent(JSON.stringify({finale:lang.finale})) + "\"));";
-					code.textContent += "function log(str){console.log(str);}";
-					code.textContent += parseCoordinates.toString();
-					code.textContent +="var waypointIcon='"+waypointIcon+"'; var finalIcon='"+finalIcon+"';(";
-					code.textContent += modifyCachePageMap.toString();
-					code.textContent += ")();";
-					document.getElementsByTagName('head')[0].appendChild(code);
-
+				if (currentComment.origlat && currentComment.origlng) {
+					mapPayload.home = [ parseFloat(currentComment.origlat), parseFloat(currentComment.origlng) ];
 				}
-				else{
-*/
-					modifyCachePageMap();
-//				}
+
+				for (var wp = 0; currentComment.waypoints && (wp < currentComment.waypoints.length); wp++) {
+					var wpCoords = parseCoordinates(currentComment.waypoints[wp].coordinate);
+					if (wpCoords.length === 2) {
+						mapPayload.waypoints.push({
+							lat : wpCoords[0],
+							lng : wpCoords[1],
+							name : currentComment.waypoints[wp].name
+						});
+					}
+				}
+
+				if (currentComment.lat && currentComment.lng) {
+					mapPayload.finalCoords = [ parseFloat(currentComment.lat), parseFloat(currentComment.lng) ];
+				}
+
+				appendScript("text", "(" + gccMiniMapPatch.toString() + ")(JSON.parse(decodeURIComponent(\""
+						+ encodeURIComponent(JSON.stringify(mapPayload)) + "\")));");
 			} else {
 				detailFinalInputLatLng.value = DEFAULTCOORDS;
 				detailFinalInputLatLng.setAttribute('style', 'color:grey');
@@ -2906,7 +2793,6 @@ var mainCode = function(){
 								doSaveCommentToGUID(currentComment);
 								AddComment.style.display = "none";
 								EditComment.style.display = "inline";
-								ShareComment.style.display = "inline";
 								ArchiveComment.style.display = "inline";
 								DeleteComment.style.display = "inline";
 							}
@@ -2991,45 +2877,45 @@ var mainCode = function(){
 			}
 		}
 
-// ToDo: URLs anpassen, die richtigen Orig Koords verwenden
-		// check for "links to maps" table and augment the links
-/*		var mapLinks = document.getElementById('ctl00_ContentBody_MapLinks_MapLinks');
-		if (mapLinks && currentComment && (currentComment.lat && currentComment.lng)) {
+// check for "links to maps" table and augment the links
+		var mapLinks = document.getElementById('ctl00_ContentBody_MapLinks_MapLinks');
+		if (mapLinks && currentComment && (currentComment.lat || (currentComment.waypoints && currentComment.waypoints.length > 0))) {
 			var items = mapLinks.getElementsByTagName('li');
-			var newlink = "";
+
 			for (var index = 0; index < items.length; index++) {
 				var link = items[index].getElementsByTagName('a')[0];
-				if (link.getAttribute('href').search('maps.google.com') > -1) {
-					newlink = link.getAttribute('href') + " to: "
-							+ convertDec2DMS(currentComment.lat, currentComment.lng) + " (" + lang.final_coordinate + ")";
-				} else if (link.getAttribute('href').search('mapquest.com') > -1) {
-					var chunks = link.getAttribute('href').split('&');
-					for (var i = 0; i < chunks.length; i++) {
-						var chunk = chunks[i];
-						var maplat, maplng;
-						if (chunk.search('latitude') > -1) {
-							maplat = chunk.split('=')[1];
-						} else if (chunk.search('longitude') > -1) {
-							maplng = chunk.split('=')[1];
+
+				// Wir suchen den Link zu Google Maps
+				if (link.getAttribute('href').search('google') > -1) {
+					// Moderne Google Maps Routing-URL
+					var googleDirUrl = "https://www.google.com/maps/dir/";
+
+					// 1. Alle Custom Waypoints als Zwischenziele in die Route packen
+					if (currentComment.waypoints && currentComment.waypoints.length > 0) {
+						for (var w = 0; w < currentComment.waypoints.length; w++) {
+							var coords = parseCoordinates(currentComment.waypoints[w].coordinate);
+							if (coords.length === 2) {
+								googleDirUrl += coords[0] + "," + coords[1] + "/";
+							}
 						}
 					}
 
-					newlink = "http://www.mapquest.com/?saddr=" + maplat + "," + maplng + "&daddr=" + currentComment.lat
-							+ "," + currentComment.lng + "&zoom=10";
-				} else
-					continue;
+					// 2. Das Finale als Endziel anhängen
+					if (currentComment.lat && currentComment.lng) {
+						googleDirUrl += currentComment.lat + "," + currentComment.lng;
+					}
 
-				if (newlink != "") {
+					// 3. Den Link sauber ins GC-Layout einfügen
 					var a = document.createElement('a');
 					a.setAttribute('target', '_blank');
-					a.setAttribute('href', newlink);
-					a.appendChild(document.createTextNode("(" + lang.detail_inclfinal + ")"));
+					a.setAttribute('href', googleDirUrl);
+					a.appendChild(document.createTextNode(" (" + lang.detail_inclfinal + ")"));
+
 					link.parentNode.appendChild(document.createTextNode(' '));
 					link.parentNode.appendChild(a);
 				}
 			}
 		}
-*/
 		//saveToCacheNote(currentComment);
 	}
 
@@ -3087,7 +2973,7 @@ var mainCode = function(){
 					}
 				});
 
-				if(browser === "FireFox"){
+				if (needsPageBridge) {
 					appendScript("text", "(" + pageMethodCaller.toString() + ")('" + dataString.replace(/'/g,"%27") + "'.replace('%27','\\''));");
 				}
 				else{
@@ -3228,162 +3114,150 @@ var mainCode = function(){
 		}
 	}
 
-	async function gccommentOnPrintPage() {
+    async function gccommentOnPrintPage() {
 		log('debug', 'determining print page');
 
 		try {
-			// Wir warten bis zu 10 Sekunden, ob entweder das GCTour-Overlay oder der normale Print-Hook auftaucht
-			const hook = await waitForElement('#Content, .dark_msg_overlay', 10000);
+			// Warten auf den nativen Print-Hook von Geocaching.com
+			const hook = await waitForElement('#Content', 10000);
+			log("debug", "regular print page found");
 
-			if (hook.classList.contains('dark_msg_overlay')) {
-				log("debug", "gctour print page overlay found. Waiting for it to disappear...");
-				// Bei GCTour warten wir per Observer, bis das Overlay verschwindet
-				const observer = new MutationObserver((mutations, obs) => {
-					if (!document.querySelector('.dark_msg_overlay')) {
-						obs.disconnect();
-						gcTourPrintPage();
-					}
-				});
-				observer.observe(document.body, { childList: true, subtree: true });
-			} else {
-				log("debug", "regular print page found");
-				const actionString = document.getElementById('Form1').getAttribute('action');
-				currentCacheGUID = actionString.split('&')[0].split('=')[1];
-				const comment = doLoadCommentFromGUID(currentCacheGUID);
+			const actionString = document.getElementById('Form1').getAttribute('action');
+			currentCacheGUID = actionString.split('&')[0].split('=')[1];
+			const comment = doLoadCommentFromGUID(currentCacheGUID);
 
-				if (comment != null) {
-					// add marker to map
-					if (comment.lat && comment.lng) {
-						const mapImg = document.getElementById('map');
-						if (mapImg) {
-							mapImg.setAttribute('src', addToGoogleMapsStatic({
-								href : mapImg.getAttribute('src'),
-								lat : comment.lat,
-								lng : comment.lng,
-								icon : finalIconLink,
-								label : "F"
-							}));
-							for (let k = 0; comment.waypoints && (k < comment.waypoints.length); k++) {
-								const wpt = comment.waypoints[k];
-								const coords = parseCoordinates(wpt.coordinate);
-								if (coords.length == 2) {
-									mapImg.setAttribute('src', addToGoogleMapsStatic({
-										href : mapImg.getAttribute('src'),
-										lat : coords[0],
-										lng : coords[1],
-										label : k + 2
-									}));
-								}
+			if (comment != null) {
+				// add marker to map
+				if (comment.lat && comment.lng) {
+					const mapImg = document.getElementById('map');
+					if (mapImg) {
+						mapImg.setAttribute('src', addToGoogleMapsStatic({
+							href : mapImg.getAttribute('src'),
+							lat : comment.lat,
+							lng : comment.lng,
+							icon : finalIconLink,
+							label : "F"
+						}));
+						for (let k = 0; comment.waypoints && (k < comment.waypoints.length); k++) {
+							const wpt = comment.waypoints[k];
+							const coords = parseCoordinates(wpt.coordinate);
+							if (coords.length == 2) {
+								mapImg.setAttribute('src', addToGoogleMapsStatic({
+									href : mapImg.getAttribute('src'),
+									lat : coords[0],
+									lng : coords[1],
+									label : k + 2
+								}));
 							}
 						}
+					}
 
-						unsafeWindow.__imageResize = unsafeWindow.imageResize;
-						unsafeWindow.imageResize = function(width, height) {
-							unsafeWindow.__imageResize(width, height);
-							const addToGoogleMapsStaticInner = function(data) {
-								const href = data.href;
-								const finlat = data.lat;
-								const finlng = data.lng;
-								const icon = data.icon;
-								const label = data.label;
+					unsafeWindow.__imageResize = unsafeWindow.imageResize;
+					unsafeWindow.imageResize = function(width, height) {
+						unsafeWindow.__imageResize(width, height);
+						const addToGoogleMapsStaticInner = function(data) {
+							const href = data.href;
+							const finlat = data.lat;
+							const finlng = data.lng;
+							const icon = data.icon;
+							const label = data.label;
 
-								const GMstaticDelim = '&sensor';
-								const hrefParts = href.split(GMstaticDelim);
-								let result = hrefParts[0] + "&markers=color:green|";
-								if (label) {
-									result += "label:" + label + "|";
-								} else {
-									result += "label:F|";
-								}
-								if (icon)
-									result = result + "icon:" + icon + "|";
-								result = result + finlat + "," + finlng + '&sensor' + hrefParts[1];
-								return result.replace(/zoom=\d*&/, "");
-							};
-
-							for (let k = 0; comment.waypoints && (k < comment.waypoints.length); k++) {
-								const wpt = comment.waypoints[k];
-								const coords = parseCoordinates(wpt.coordinate);
-								if (coords.length == 2) {
-									mapImg.setAttribute('src', addToGoogleMapsStaticInner({
-										href : mapImg.getAttribute('src'),
-										lat : coords[0],
-										lng : coords[1],
-										label : k + 2
-									}));
-								}
+							const GMstaticDelim = '&sensor';
+							const hrefParts = href.split(GMstaticDelim);
+							let result = hrefParts[0] + "&markers=color:green|";
+							if (label) {
+								result += "label:" + label + "|";
+							} else {
+								result += "label:F|";
 							}
-							mapImg.setAttribute('src', addToGoogleMapsStaticInner({
-								href : mapImg.getAttribute('src'),
-								lat : comment.lat,
-								lng : comment.lng,
-								icon : finalIconLink
-							}));
+							if (icon)
+								result = result + "icon:" + icon + "|";
+							result = result + finlat + "," + finlng + '&sensor' + hrefParts[1];
+							return result.replace(/zoom=\d*&/, "");
 						};
-					}
 
-					// add comment sortable
-					let contentGroup = hook.lastChild;
-					while ((contentGroup.nodeName.toLowerCase() != "div") && (contentGroup != null)) {
-						contentGroup = contentGroup.previousSibling;
-					}
-
-					const commentDiv = document.createElement('div');
-					commentDiv.setAttribute('class', 'item ui-widget ui-widget-content ui-helper-clearfix');
-
-					const headerDiv = document.createElement('div');
-					headerDiv.setAttribute('class', 'item-header');
-					let headText = `<span id='gccommentwidget' class='ui-icon ui-icon-minusthick'></span><h2>${lang.mycomment}`;
-
-					if (comment.lat && comment.lng) {
-						headText += ` (final at ${convertDec2DMS(comment.lat, comment.lng)})`;
-					}
-					headText += "</h2>";
-					headerDiv.innerHTML = headText;
-
-					const contentDiv = document.createElement('div');
-					contentDiv.setAttribute('class', 'item-content');
-					contentDiv.innerHTML = comment.commentValue.replace(/\n/g, '<br/>');
-
-					commentDiv.appendChild(headerDiv);
-					commentDiv.appendChild(contentDiv);
-
-					contentGroup.insertBefore(commentDiv, contentGroup.firstChild);
-					$("#gccommentwidget").click(function() {
-					    $(this).toggleClass("ui-icon-minusthick").toggleClass("ui-icon-plusthick");
-					    $(this).parents(".item:first").toggleClass("no-print").find(".item-content").toggle();
-					});
-
-					if (comment.waypoints && (comment.waypoints.length > 0)) {
-						const table = document.getElementById('Waypoints');
-						if (table) {
-							for (let j = 0; comment.waypoints && (j < comment.waypoints.length); j++) {
-								const waypoint = createAdditionalWaypointsRow({
-									imageAlt : "",
-									imageSrc : waypointIcon,
-									prefix : comment.waypoints[j].prefix,
-									lookup : comment.waypoints[j].lookup,
-									name : comment.waypoints[j].name,
-									coordinate : comment.waypoints[j].coordinate,
-									enableEdit : false,
-									enableSort : false
-								});
-								table.getElementsByTagName('tbody')[0].appendChild(waypoint);
+						for (let k = 0; comment.waypoints && (k < comment.waypoints.length); k++) {
+							const wpt = comment.waypoints[k];
+							const coords = parseCoordinates(wpt.coordinate);
+							if (coords.length == 2) {
+								mapImg.setAttribute('src', addToGoogleMapsStaticInner({
+									href : mapImg.getAttribute('src'),
+									lat : coords[0],
+									lng : coords[1],
+									label : k + 2
+								}));
 							}
+						}
+						mapImg.setAttribute('src', addToGoogleMapsStaticInner({
+							href : mapImg.getAttribute('src'),
+							lat : comment.lat,
+							lng : comment.lng,
+							icon : finalIconLink
+						}));
+					};
+				}
 
-							if (comment.lat && comment.lng) {
-								const finalRow = createAdditionalWaypointsRow({
-									imageAlt : lang.final_location,
-									imageSrc : finalIcon,
-									prefix : "FL",
-									lookup : "FL",
-									name : lang.final_location_byGCC,
-									coordinate : convertDec2DMS(comment.lat, comment.lng),
-									enableSort : false,
-									enableEdit : false
-								});
-								table.getElementsByTagName('tbody')[0].appendChild(finalRow);
-							}
+				// add comment sortable
+				let contentGroup = hook.lastChild;
+				while ((contentGroup.nodeName.toLowerCase() != "div") && (contentGroup != null)) {
+					contentGroup = contentGroup.previousSibling;
+				}
+
+				const commentDiv = document.createElement('div');
+				commentDiv.setAttribute('class', 'item ui-widget ui-widget-content ui-helper-clearfix');
+
+				const headerDiv = document.createElement('div');
+				headerDiv.setAttribute('class', 'item-header');
+				let headText = `<span id='gccommentwidget' class='ui-icon ui-icon-minusthick'></span><h2>${lang.mycomment}`;
+
+				if (comment.lat && comment.lng) {
+					headText += ` (final at ${convertDec2DMS(comment.lat, comment.lng)})`;
+				}
+				headText += "</h2>";
+				headerDiv.innerHTML = headText;
+
+				const contentDiv = document.createElement('div');
+				contentDiv.setAttribute('class', 'item-content');
+				contentDiv.innerHTML = comment.commentValue.replace(/\n/g, '<br/>');
+
+				commentDiv.appendChild(headerDiv);
+				commentDiv.appendChild(contentDiv);
+
+				contentGroup.insertBefore(commentDiv, contentGroup.firstChild);
+				$("#gccommentwidget").click(function() {
+				    $(this).toggleClass("ui-icon-minusthick").toggleClass("ui-icon-plusthick");
+				    $(this).parents(".item:first").toggleClass("no-print").find(".item-content").toggle();
+				});
+
+				if (comment.waypoints && (comment.waypoints.length > 0)) {
+					const table = document.getElementById('Waypoints');
+					if (table) {
+						for (let j = 0; comment.waypoints && (j < comment.waypoints.length); j++) {
+							const waypoint = createAdditionalWaypointsRow({
+								imageAlt : "",
+								imageSrc : waypointIcon,
+								prefix : comment.waypoints[j].prefix,
+								lookup : comment.waypoints[j].lookup,
+								name : comment.waypoints[j].name,
+								coordinate : comment.waypoints[j].coordinate,
+								enableEdit : false,
+								enableSort : false
+							});
+							table.getElementsByTagName('tbody')[0].appendChild(waypoint);
+						}
+
+						if (comment.lat && comment.lng) {
+							const finalRow = createAdditionalWaypointsRow({
+								imageAlt : lang.final_location,
+								imageSrc : finalIcon,
+								prefix : "FL",
+								lookup : "FL",
+								name : lang.final_location_byGCC,
+								coordinate : convertDec2DMS(comment.lat, comment.lng),
+								enableSort : false,
+								enableEdit : false
+							});
+							table.getElementsByTagName('tbody')[0].appendChild(finalRow);
 						}
 					}
 				}
@@ -3680,7 +3554,7 @@ var mainCode = function(){
 			} ]
 	};
 
-	if(browser === "FireFox"){
+	if (needsPageBridge) {
 		$('#gccommentoverviewtable').dataTable(cloneInto(oDataTableSettings, unsafeWindow));
 	}
 	else{
@@ -3745,31 +3619,6 @@ var mainCode = function(){
 		htmlResult += wptP;
 
 		return htmlResult;
-	}
-
-	function gcTourPrintPage() {
-		log("info", 'weaving into gctour print page');
-		var bodychilds = document.getElementsByTagName('body')[0].childNodes;
-		for (var i = 0; i < bodychilds.length; i++) {
-			var child = bodychilds[i];
-			if ((child.getAttribute('class') != null) && (child.getAttribute('class') == 'cacheDetail')) {
-				var guid = child.getAttribute('id');
-				if (guid != null) {
-					var contentDiv = child.getElementsByTagName('div')[5];
-					var waypointDiv = contentDiv.getElementsByTagName('div')[3];
-					var savedComment = doLoadCommentFromGUID(guid);
-					if (savedComment != null) {
-						var mycomment = document.createElement('div');
-						if ((savedComment.lat != null) && (savedComment.lng != null))
-							mycomment.innerHTML = mycomment.innerHTML + "<b>" + lang.final_coordinate + "</b><br/>"
-									+ convertDec2DMS(savedComment.lat, savedComment.lng) + "<br/>";
-						mycomment.innerHTML = mycomment.innerHTML + "<b>" + lang.mycomment + ": </b>"
-								+ savedComment.commentValue.replace(/\n/g, '<br/>');
-						waypointDiv.parentNode.insertBefore(mycomment, waypointDiv);
-					}
-				}
-			}
-		}
 	}
 
 	// es wird eine Tabelle angezeigt (suchergebnis, profilseite, etc.).
@@ -3908,37 +3757,67 @@ var mainCode = function(){
 		return result;
 	}
 
+	function doSaveCommentV2(comment) {
+		if (!comment || !comment.gccode) {
+			return false;
+		}
+		comment.v = COMSCHEMA;
+		GM_setValue(COMV2PREFIX + comment.gccode, JSON.stringify(comment));
+		return true;
+	}
+
+	function doLoadCommentV2(gcCode) {
+		var raw = GM_getValue(COMV2PREFIX + gcCode);
+		if (!raw) {
+			return null;
+		}
+		try {
+			return JSON.parse(raw);
+		} catch (e) {
+			log("error", "Record for " + gcCode + " is not readable: " + e);
+			return null;
+		}
+	}
+
 	function doSaveCommentWTimeToGUID(guid, gccode, name, commentValue, saveTime, state, lat, lng, origlat,
 			origlng, archived) {
-		var key = "";
-		var value = "";
-		var actualGUID = "";
-		var actualGCCode = "";
+		var comment;
 
 		if (typeof guid === "object") { // we got a JSON object (hopefully)
-			key = COMPREFIX + guid.guid;
-			value = JSON.stringify(guid);
-			actualGUID = guid.guid;
-			actualGCCode = guid.gccode;
+			comment = guid;
 		} else {
-			key = COMPREFIX + guid;
-			value = gccode + DELIM + name + DELIM + commentValue + DELIM + saveTime + DELIM + state + DELIM + lat
-					+ DELIM + lng + DELIM + origlat + DELIM + origlng + DELIM + archived;
-			actualGUID = guid;
-			actualGCCode = gccode;
+			comment = {
+				guid : guid,
+				gccode : gccode,
+				name : name,
+				commentValue : commentValue,
+				saveTime : saveTime,
+				state : state
+			};
+			if (lat) comment.lat = lat;
+			if (lng) comment.lng = lng;
+			if (origlat) comment.origlat = origlat;
+			if (origlng) comment.origlng = origlng;
+			if (archived) comment.archived = archived;
 		}
 
-		if (key && value && actualGUID && actualGCCode) {
-			GM_setValue(key, value);
-			log("info", "saving " + key + " - " + value);
-
-			// index entry for fast gccode-guid determination
-			var keyIndex = COMGCPREFIX + actualGCCode;
-			GM_setValue(keyIndex, actualGUID);
-		} else {
-			log('debug', 'Error saving ' + guid + ". key=" + key + " value=" + value + " actualGUID=" + actualGUID
-					+ " actualGCCode=" + actualGCCode);
+		if (!comment.guid || !comment.gccode) {
+			log('debug', 'Error saving comment. guid=' + comment.guid + ' gccode=' + comment.gccode);
+			return;
 		}
+
+		comment.v = COMSCHEMA;
+		var value = JSON.stringify(comment);
+
+		// Neuer Schluessel ueber den GC-Code.
+		GM_setValue(COMV2PREFIX + comment.gccode, value);
+
+		// Bis Version 105 zusaetzlich unter dem GUID-Schluessel samt Index: solange
+		// laufen Iteration, GUID-Zugriff und ein moegliches Downgrade unveraendert.
+		GM_setValue(COMPREFIX + comment.guid, value);
+		GM_setValue(COMGCPREFIX + comment.gccode, comment.guid);
+
+		log("info", "saving " + comment.gccode + " (" + comment.guid + ")");
 	}
 
 	function doSaveCommentToGUID(guid, gccode, name, commentValue, state, lat, lng, origlat, origlng, archived) {
@@ -3991,8 +3870,30 @@ var mainCode = function(){
 	}
 
 	function doLoadCommentFromGCCode(gcCode) {
+		var comment = doLoadCommentV2(gcCode);
+		if (comment) {
+			return comment;
+		}
+
+		// Fallback fuer Datensaetze, die die Migration noch nicht erfasst hat:
+		// GC-Code -> GUID -> alter Schluessel.
 		var guid = getGUIDFromGCCode(gcCode);
-		return doLoadCommentFromGUID(guid);
+		if (!guid) {
+			return null;
+		}
+
+		comment = doLoadCommentFromGUID(guid);
+
+		// Selbstheilung: wir wissen hier bereits, dass der neue Schluessel fehlt,
+		// also kostet das Nachziehen keinen zusaetzlichen Lesezugriff. Faengt alles
+		// ab, was nach dem einmaligen Lauf von Wartung 104 noch unter dem alten
+		// Schluessel auftaucht - etwa aus einem zurueckgespielten Backup.
+		if (comment && comment.gccode) {
+			log('debug', 'Repairing missing GC code key for ' + comment.gccode);
+			doSaveCommentV2(comment);
+		}
+
+		return comment;
 	}
 
 	function editComment() {
@@ -4008,7 +3909,6 @@ var mainCode = function(){
 			}
 		}
 		EditComment.style.display = 'none';
-		ShareComment.style.display = 'none';
 		ArchiveComment.style.display = 'none';
 		EditCancelComment.style.display = 'inline';
 		setTimeout(function() {
@@ -4016,59 +3916,7 @@ var mainCode = function(){
 		}, 50);
 	}
 
-	function shareComment(guid){
-		$('#shareParagraph').hide();
-		var comment = doLoadCommentFromGUID(guid);
-		var data = "<gccomment>"+commentToGCC(comment)+"</gccomment>"
-
-		gistShare.shareComment(data, comment.gccode, comment.name).done(function(code){
-			console.log(comment.gccode +" successfully shared: "+ code);
-			if($('shareParagraph').length <= 0){
-				$('#gccommentarea small').after('<div style="display:none; margin-bottom: -1.0em;" id="shareParagraph"><img  style="height: 2em; width: 2em; vertical-align: middle; margin-bottom: 0.5em;" src="'+linkIcon+'"></img><input style="font-size: 1.5em; margin-left: 0.5em; width: 25em; color: darkgray;" readonly="readonly" id="shareLink"></input><a href="#shareLinkQRBig"><div id="shareLinkQR" style="height: 2.5em; width: 2.5em; vertical-align: middle; margin-bottom: 0.5em; margin-left: 0.5em; display: inline-block; cursor:pointer;"></div></a><div style="display:none;"><div style="padding:0px;margin:0px;height:600px;width:600px;" id="shareLinkQRBig"></div></div></div>');
-			}
-
-			$('#shareLink').attr("value","http://gcc.lukeIam.de#"+code);
-			$('#shareLinkQR').qrcode({
-				width: $('#shareLinkQR').width(),
-				height: $('#shareLinkQR').height(),
-				text: "http://gcc.lukeIam.de#"+code
-			}).parent().nyroModal();
-			$('#shareLinkQRBig').qrcode({
-				width: $('#shareLinkQRBig').width(),
-				height: $('#shareLinkQRBig').height(),
-				text: "http://gcc.lukeIam.de#"+code
-			});
-
-
-			$('#shareParagraph').slideDown({
-				done:(function(){
-					$('#shareLink').select();
-				})
-			});
-
-		}).fail(function(msg){
-			console.log("Sharing of " + comment.gccode + " failed: \n"+ msg);
-		});
-	}
-
 	var gistShare = new function () {
-		this.shareComment = function (data, gcid, name) {
-			var d = new $.Deferred();
-
-			gist.uploadNewGist(data, gcid + ".gcc", "Shared comment for \"" + name + "\" (" + gcid + ")").done(function (result) {
-				if (typeof (result) !== "undefined" && typeof (result["id"]) !== "undefined") {
-					d.resolve("gcc" + result["id"]);
-				}
-				else {
-					d.reject("Creation failed");
-				}
-			}).fail(function (jqXHR, textStatus) {
-				d.reject(textStatus + " - " + jqXHR.responseText);
-			});
-
-			return d.promise();
-		};
-
 		this.getComment = function (id) {
 			var d = new $.Deferred();
 			var files = [];
@@ -4148,48 +3996,6 @@ var mainCode = function(){
 				onerror: function(e){d.reject(e.statusText);},
 				method: "GET"
 			});
-
-			return d.promise();
-		};
-
-		this.uploadNewGist = function(data, filename, desc){
-			var d = new $.Deferred();
-			if(typeof(data) != "object"){
-				data = [data];
-			}
-
-			if(typeof(filename) != "object"){
-				filename = [filename];
-			}
-
-			var f = {};
-			for(i=0;i<filename.length&&i<data.length;i++){
-				f[filename[i]] = {
-					content:data[i]
-				};
-			}
-
-			GM_xmlhttpRequest({
-					url: gistApiUrl,
-					method: "POST",
-					data: JSON.stringify({
-						public: false,
-						description: desc,
-						files: f
-					}),
-					onload: function(e){
-						var data = JSON.parse(e.responseText);
-						var gistIdLog = JSON.parse(GM_getValue("GistIdLog", "[]"));
-						if(gistIdLog.length > 50){
-							gistIdLog.shift();
-						}
-						gistIdLog.push(data.id);
-						GM_setValue("GistIdLog", JSON.stringify(gistIdLog));
-						d.resolve(data);
-					},
-					onerror: function(e){d.reject(e.statusText);}
-				}
-			);
 
 			return d.promise();
 		};
@@ -4290,7 +4096,7 @@ var mainCode = function(){
 						}
 					});
 
-					if(browser === "FireFox"){
+					if (needsPageBridge) {
 						appendScript("text", "(" + pageMethodCaller.toString() + ")('" + dataString.replace(/'/g,"%27") + "'.replace('%27','\\''));");
 					}
 					else{
@@ -4338,6 +4144,7 @@ var mainCode = function(){
 	function deleteComment(guid, gccode) {
 		GM_deleteValue(COMPREFIX + guid);
 		GM_deleteValue(COMGCPREFIX + gccode);
+		GM_deleteValue(COMV2PREFIX + gccode);
 	}
 
 	function saveComment() {
@@ -4377,7 +4184,6 @@ var mainCode = function(){
 		detailCommentInputLatLng.setAttribute("disabled", "");
 		AddComment.style.display = 'none';
 		EditComment.style.display = 'inline';
-		ShareComment.style.display = 'inline';
 		ArchiveComment.style.display = 'inline';
 		DeleteComment.style.display = 'inline';
 		updateSaveTime(new Date());
@@ -5095,109 +4901,6 @@ var mainCode = function(){
 		}
 	}
 
-	function performFilteredGistExport() {
-		var exportType = $('#exportTypeSelector option:selected').text();
-		var data = null;
-
-		if (exportType === "GCC") {
-			data = xmlversion + buildGCCExportString(true);
-		} else if (exportType === "CSV") {
-			data = exportToCSV();
-		} else if (exportType === "HTML") {
-			data = exportToHTML();
-		} else if (exportType === "GPX") {
-			data = exportToGPX();
-		} else if (exportType === "KML") {
-			data = exportToKML();
-		} else if (exportType === "JSON") {
-			data = exportToJSON();
-		}
-
-		if (data) {
-			var fileNameSuggest = "" + createTimeString(new Date(), true) + "_filteredExport."
-					+ exportType.toLowerCase();
-			var fileName = prompt(lang.export_toDropboxEnterFileName, fileNameSuggest);
-
-			if (fileName) {
-				exportGistButton.parentNode.insertBefore(waitingTag, exportDropboxButton);
-				waitingTag.setAttribute('style', 'display:inline');
-				waitingTag.setAttribute('src', waitingGif);
-
-				gist.uploadNewGist(data, fileName, "GCC Export ("+ createTimeString(new Date(), true) +")")
-				.done(function (result) {
-					waitingTag.setAttribute("src", successIcon);
-					setTimeout(function() {
-						$("#waiting").fadeOut('slow', function() {
-						});
-					}, 5000);
-
-					if($('#shareParagraph').length <= 0){
-						$('#exportDiv').append('<div style="display:none; margin-bottom: 0.0em; margin-left: 0.5em;" id="shareParagraph"><img  style="height: 2em; width: 2em; vertical-align: middle; margin-bottom: 0.5em;" src="'+linkIcon+'"></img><input style="font-size: 1.5em; margin-left: 0.5em; width: 25em; color: darkgray;" readonly="readonly" id="shareLink"></input> <a href="#shareParagraphQRBig"> <div id="shareParagraphQR" style="height: 2.5em; width: 2.5em; vertical-align: middle; margin-bottom: 0.5em; margin-left: 0.5em; display: inline-block; cursor:pointer;" ></div></a><div style="display:none;"><div style="padding:0px;margin:0px;height:600px;width:600px;" id="shareParagraphQRBig"></div></div></div>');
-					}
-					$('#shareLink').attr("value","http://gcc.lukeIam.de#gccc" + result["id"]);
-					$('#shareParagraphQR').qrcode({
-						width: $('#shareParagraphQR').width(),
-						height: $('#shareParagraphQR').height(),
-						text: "http://gcc.lukeIam.de#"+result["id"]
-					}).parent().nyroModal();
-					$('#shareParagraphQRBig').qrcode({
-						width: $('#shareParagraphQRBig').width(),
-						height: $('#shareParagraphQRBig').height(),
-						text: "http://gcc.lukeIam.de#"+result["id"]
-					});
-					$('#shareParagraph').slideDown({
-						done:(function(){
-							$('#shareLink').select();
-						})
-					});
-
-					if(GM_getValue("idResolverId", "") !== "" && GM_getValue("idResolverSecret", "") !== ""){
-						GM_xmlhttpRequest({
-							url: "https://idresolver.azurewebsites.net/",
-							onload: function(e){
-								if($('#shareLinkPermExport').length <= 0){
-									$('#exportDiv').append('<span>And your always uptodate link: </span> <br> <img style="height: 2em; width: 2em; vertical-align: middle; margin-bottom: 0.5em; margin-left: 0.5em;" src="'+linkIcon+'"></img><input style="font-size: 1.5em; margin-left: 0.5em; width: 30em; color: darkgray;" readonly="readonly" id="shareLinkPermExport"></input><a href="#shareLinkPermExportQRBig"> <div id="shareLinkPermExportQR" style="height: 2.5em; width: 2.5em; vertical-align: middle; margin-bottom: 0.5em; margin-left: 0.5em;display: inline-block; cursor:pointer;"></div></a><div style="display:none;"><div style="padding:0px;margin:0px;height:600px;width:600px;" id="shareLinkPermExportQRBig"></div></div>');
-								}
-								$('#shareLinkPermExport').attr("value", "http://gccs.lukeIam.de#" + GM_getValue("idResolverId", "").trim());
-								$('#shareLink').attr("value","http://gcc.lukeIam.de#gccc" + result["id"]);
-								$('#shareLinkPermExportQR').qrcode({
-									width: $('#shareLinkPermExportQR').width(),
-									height: $('#shareLinkPermExportQR').height(),
-									text: "http://gccs.lukeIam.de#"+result["id"]
-								}).parent().nyroModal();
-								$('#shareLinkPermExportQRBig').qrcode({
-									width: $('#shareLinkPermExportQRBig').width(),
-									height: $('#shareLinkPermExportQRBig').height(),
-									text: "http://gccs.lukeIam.de#"+result["id"]
-								});
-								$('#shareLinkPermExport').slideDown();
-
-								log("debug", "Updated ID at IDResolver");
-							},
-							onerror: function(e){
-								log("debug", "IDResolver updated failed");
-							},
-							headers:{
-								"Content-Type": "application/json"
-							},
-							data: JSON.stringify( {
-								Id: GM_getValue("idResolverId", "").trim(),
-								SecretToken: GM_getValue("idResolverSecret", "").trim(),
-								TargetId: "gccc"+result["id"]
-							}),
-							method: "PUT"
-						});
-					}
-
-					log("debug", "Export to Gist successful");
-				}).fail(function (jqXHR, textStatus) {
-					waitingTag.setAttribute("src", errorIcon);
-					log("debug", textStatus + " - " + jqXHR.responseText);
-				});
-			}
-		}
-	}
-
 	function performFilteredExport() {
 		var exportType = $('#exportTypeSelector option:selected').text();
 		var parentElement = $('#exportDiv')[0];
@@ -5589,6 +5292,189 @@ var mainCode = function(){
 			else
 				return lastSave.getFullYear() + "-" + month + "-" + day + " " + hour + ":" + minute + ":" + sec;
 		}
+	}
+
+	// Wird per appendScript in den Seitenkontext injiziert und per toString()
+	// serialisiert. Die Funktion darf deshalb nichts aus dem Script-Scope
+	// referenzieren - alles, was sie braucht, kommt ueber data herein.
+	function gccMiniMapPatch(data) {
+		var leaflet = null;
+		var drawn = false;
+
+		// Leaflet aus dem Webpack-Bundle der Seite holen. Ein leerer Chunk mit
+		// Callback laesst sich einschleusen, der Runtime reicht dabei sein
+		// __webpack_require__ durch.
+		function findLeaflet() {
+			var chunk = window.webpackChunkui_js_core;
+			if (!chunk || typeof chunk.push !== 'function') {
+				return null;
+			}
+
+			var found = null;
+			try {
+				chunk.push([ [ 'gccomment-' + Date.now() ], {}, function (req) {
+					var ids = Object.keys(req.m);
+					for (var i = 0; i < ids.length; i++) {
+						var source;
+						try {
+							source = req.m[ids[i]].toString();
+						} catch (e) {
+							continue;
+						}
+
+						// Nur Kandidaten ausfuehren. Wuerden wir blind jedes Modul
+						// laden, loesten wir quer durch die Seite Seiteneffekte aus.
+						if (source.indexOf('leaflet-container') === -1
+								&& source.indexOf('_leaflet_id') === -1) {
+							continue;
+						}
+
+						try {
+							var mod = req(ids[i]);
+							if (mod && mod.Map && mod.TileLayer && mod.version) {
+								found = mod;
+								return;
+							}
+						} catch (e) {
+							// Modul laesst sich nicht isoliert laden - weitersuchen
+						}
+					}
+				} ]);
+			} catch (e) {
+				return null;
+			}
+			return found;
+		}
+
+		function draw(map) {
+			if (drawn || !leaflet || !map || typeof map.addLayer !== 'function') {
+				return;
+			}
+
+			// Nur die Minimap bemalen, nicht irgendeine andere Karte der Seite.
+			var root = document.getElementById('mini-map-root');
+			if (root && typeof map.getContainer === 'function' && !root.contains(map.getContainer())) {
+				return;
+			}
+			drawn = true;
+
+			var L = leaflet;
+			var line = [];
+
+			// Zwei Bounds: bounds umfasst nur unsere eigenen Punkte und bestimmt den
+			// Bildausschnitt. Die Listing-Koordinaten liegen bei Mysterys oft weit
+			// entfernt und wuerden die Karte weit herauszoomen - sie zaehlen deshalb
+			// nur in allBounds, das als Rueckfall dient.
+			var bounds = L.latLngBounds([]);
+			var allBounds = L.latLngBounds([]);
+
+			if (data.home) {
+				line.push(data.home);
+				allBounds.extend(data.home);
+			}
+
+			for (var i = 0; i < data.waypoints.length; i++) {
+				var wpt = data.waypoints[i];
+				L.marker([ wpt.lat, wpt.lng ], {
+					icon : L.icon({
+						iconUrl : data.waypointIcon,
+						iconSize : [ 16, 16 ],
+						iconAnchor : [ 8, 8 ]
+					}),
+					title : wpt.name,
+					interactive : false
+				}).addTo(map);
+				line.push([ wpt.lat, wpt.lng ]);
+				bounds.extend([ wpt.lat, wpt.lng ]);
+				allBounds.extend([ wpt.lat, wpt.lng ]);
+			}
+
+			if (data.finalCoords) {
+				L.marker(data.finalCoords, {
+					icon : L.icon({
+						iconUrl : data.finalIcon,
+						iconSize : [ 22, 22 ],
+						iconAnchor : [ 11, 11 ]
+					}),
+					title : data.finalTitle,
+					interactive : false
+				}).addTo(map);
+				line.push(data.finalCoords);
+				bounds.extend(data.finalCoords);
+				allBounds.extend(data.finalCoords);
+			}
+
+			if (line.length > 1) {
+				L.polyline(line, {
+					color : '#000000',
+					weight : 1,
+					opacity : 1,
+					interactive : false
+				}).addTo(map);
+			}
+
+			// Haben wir keine eigenen Punkte, bleibt nur der weite Ausschnitt.
+			if (!bounds.isValid()) {
+				bounds = allBounds;
+			}
+
+			if (bounds.isValid()) {
+				// maxZoom verhindert, dass ein einzelner Punkt bis in die maximale
+				// Kachelstufe hineinzoomt und man die Umgebung nicht mehr erkennt.
+				map.fitBounds(bounds, {
+					padding : [ 12, 12 ],
+					maxZoom : 17
+				});
+			}
+		}
+
+		function installHooks() {
+			var proto = leaflet.Map.prototype;
+
+			// Der Prototyp ist allen Instanzen gemeinsam, die Wrapper greifen also
+			// auch bei einer Karte, die vor uns fertig war. initialize faengt neue
+			// Karten ab, invalidateSize und _resetView die bereits bestehenden.
+			[ 'initialize', 'invalidateSize', '_resetView' ].forEach(function (name) {
+				var original = proto[name];
+				if (typeof original !== 'function') {
+					return;
+				}
+				proto[name] = function () {
+					var result = original.apply(this, arguments);
+					try {
+						draw(this);
+					} catch (e) {
+						if (window.console) {
+							console.warn('GCComment: minimap hook failed', e);
+						}
+					}
+					return result;
+				};
+			});
+		}
+
+		// Das Bundle wird nachgeladen, die Minimap sogar lazy. Deshalb pollen,
+		// bis Leaflet auftaucht, statt einmalig zu versuchen.
+		var attempts = 0;
+		var poll = setInterval(function () {
+			attempts++;
+			leaflet = findLeaflet();
+
+			if (leaflet) {
+				clearInterval(poll);
+				installHooks();
+
+				// Falls die Karte schon stand, bevor die Hooks sassen: ein
+				// resize-Event laesst Leaflet invalidateSize aufrufen.
+				setTimeout(function () {
+					if (!drawn) {
+						window.dispatchEvent(new Event('resize'));
+					}
+				}, 2000);
+			} else if (attempts > 150) {
+				clearInterval(poll);
+			}
+		}, 100);
 	}
 
 	function appendScript(type, script, context) {
@@ -6097,14 +5983,12 @@ var mainCode = function(){
 
 	}
 
-	if (typeof (chrome) !== "undefined") {
-		// Chrome detected
-		browser = "Chrome";
-		main();
-	} else {
-		browser = "FireFox";
-		main();
-	}
+	// Nicht den Browser raten, sondern die Faehigkeit pruefen: cloneInto und
+	// exportFunction gibt es genau dann, wenn eine Xray-Grenze existiert. Das
+	// gilt unabhaengig von Browser, Version und Userscript-Manager.
+	needsPageBridge = (typeof cloneInto === "function" && typeof exportFunction === "function");
+	log('debug', 'Page bridge required: ' + needsPageBridge);
+	main();
 }
 
 isTampermonkey = (typeof GM_info != "undefined" && typeof GM_info.scriptHandler != "undefined" && GM_info.scriptHandler == "Tampermonkey") ? true : false;
@@ -6204,6 +6088,25 @@ function updateCheck(){
 			});
 		}
 
+		// Vergleicht zwei Versionen segmentweise. Weder ein Zahlen- noch ein
+		// Zeichenvergleich taugt dafuer: "1000" liegt als Zeichenkette vor "999",
+		// und "104.1" laesst sich gar nicht in eine Zahl wandeln. Fehlende
+		// Segmente zaehlen als Null, "104" ist damit gleich "104.0.0".
+		function compareVersions(a, b) {
+			var pa = String(a).split('.');
+			var pb = String(b).split('.');
+			var len = Math.max(pa.length, pb.length);
+
+			for (var i = 0; i < len; i++) {
+				var na = parseInt(pa[i], 10) || 0;
+				var nb = parseInt(pb[i], 10) || 0;
+				if (na !== nb) {
+					return na < nb ? -1 : 1;
+				}
+			}
+			return 0;
+		}
+
 		function checkforupdates() {
 			var updateDateString = GM_getValue('updateDate');
 			var updateDate = null;
@@ -6230,7 +6133,7 @@ function updateCheck(){
 							var oChanges = JSON.parse(responseDetails.responseText);
 							var serverVersion = oChanges.latestVersion;
 							log('info', 'updatecheck: installed version=' + version + ", server version=" + serverVersion);
-							if (serverVersion > version) {
+							if (compareVersions(version, serverVersion) < 0) {
 								updateAvailable(oChanges);
 							}
 						} catch (JSONException) {
